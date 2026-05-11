@@ -1,0 +1,10 @@
+{
+  "name": "crime-prediction-safety-alert-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A static crime prediction and safety alert dashboard demo for student project presentation.",
+  "scripts": {
+    "start": "python -m http.server 5173",
+    "serve": "python -m http.server 5173"
+  }
+}

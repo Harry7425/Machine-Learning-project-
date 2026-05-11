@@ -1,0 +1,790 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crime Prediction & Safety Alert System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+window.addEventListener('load',()=>{
+  if(window.Chart)return;
+  window.Chart=class{
+    constructor(canvas,config){this.canvas=canvas;this.config=config;this.draw();}
+    destroy(){const ctx=this.canvas.getContext('2d');ctx&&ctx.clearRect(0,0,this.canvas.width,this.canvas.height);}
+    draw(){
+      const canvas=this.canvas;
+      const ctx=canvas.getContext('2d');
+      const dpr=window.devicePixelRatio||1;
+      const rect=canvas.getBoundingClientRect();
+      canvas.width=Math.max(1,Math.floor(rect.width*dpr));
+      canvas.height=Math.max(1,Math.floor(rect.height*dpr));
+      ctx.scale(dpr,dpr);
+      const w=rect.width,h=rect.height,p=22;
+      const data=this.config.data.datasets[0].data;
+      const labels=this.config.data.labels||[];
+      const colors=this.config.data.datasets[0].backgroundColor||'#3b82f6';
+      ctx.clearRect(0,0,w,h);
+      ctx.font='10px Space Mono, monospace';
+      ctx.fillStyle='#64748b';
+      ctx.strokeStyle='rgba(255,255,255,0.08)';
+      for(let i=0;i<4;i++){const y=p+i*(h-p*2)/3;ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();}
+      if(this.config.type==='doughnut'){
+        const total=data.reduce((a,b)=>a+b,0);
+        let start=-Math.PI/2;
+        const cx=w/2,cy=h/2,r=Math.min(w,h)*0.34;
+        data.forEach((v,i)=>{
+          const end=start+(v/total)*Math.PI*2;
+          ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,end);ctx.closePath();
+          ctx.fillStyle=Array.isArray(colors)?colors[i]:colors;ctx.fill();start=end;
+        });
+        ctx.globalCompositeOperation='destination-out';
+        ctx.beginPath();ctx.arc(cx,cy,r*0.55,0,Math.PI*2);ctx.fill();
+        ctx.globalCompositeOperation='source-over';
+        return;
+      }
+      const max=Math.max(...data,100);
+      if(this.config.type==='line'){
+        ctx.beginPath();
+        data.forEach((v,i)=>{
+          const x=p+i*(w-p*2)/(data.length-1);
+          const y=h-p-(v/max)*(h-p*2);
+          i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+        });
+        ctx.strokeStyle=this.config.data.datasets[0].borderColor||'#ef4444';
+        ctx.lineWidth=2;ctx.stroke();
+        return;
+      }
+      const gap=6,bw=(w-p*2-gap*(data.length-1))/data.length;
+      data.forEach((v,i)=>{
+        const x=p+i*(bw+gap);
+        const bh=(v/max)*(h-p*2);
+        ctx.fillStyle=Array.isArray(colors)?colors[i]:colors;
+        ctx.fillRect(x,h-p-bh,bw,bh);
+        if(labels.length<=12){ctx.fillStyle='#64748b';ctx.fillText(String(labels[i]).slice(0,5),x,h-6);}
+      });
+    }
+  };
+});
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0a0b0f;--bg2:#111318;--bg3:#181b22;--bg4:#1e2130;
+  --border:#2a2f3d;--border2:#3a3f52;
+  --red:#ef4444;--red2:#dc2626;--red-glow:rgba(239,68,68,0.15);
+  --amber:#f59e0b;--amber2:#d97706;
+  --green:#22c55e;--green2:#16a34a;
+  --blue:#3b82f6;--blue2:#2563eb;
+  --purple:#a855f7;--purple2:#9333ea;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --font-head:'Syne',sans-serif;
+  --font-mono:'Space Mono',monospace;
+  --radius:8px;--radius-lg:12px;--radius-xl:16px;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-head);min-height:100vh;overflow-x:hidden;}
+.app{display:flex;min-height:100vh;}
+
+/* SIDEBAR */
+.sidebar{width:220px;min-width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0;}
+.logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);}
+.logo-icon{width:32px;height:32px;background:var(--red);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+.logo-icon svg{width:18px;height:18px;fill:white;}
+.logo-title{font-size:13px;font-weight:800;letter-spacing:0.05em;color:var(--text);line-height:1.2;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:2px;}
+.nav{padding:12px 8px;flex:1;}
+.nav-label{font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:0.12em;padding:8px 8px 4px;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius);cursor:pointer;transition:all 0.15s;font-size:13px;font-weight:600;color:var(--text2);margin-bottom:2px;}
+.nav-item:hover{background:var(--bg3);color:var(--text);}
+.nav-item.active{background:var(--red-glow);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.sidebar-bottom{padding:12px;border-top:1px solid var(--border);}
+.status-badge{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius);font-size:11px;color:var(--green);}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
+.topbar-title{font-size:16px;font-weight:800;letter-spacing:-0.02em;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.alert-bell{position:relative;cursor:pointer;}
+.alert-count{position:absolute;top:-4px;right:-4px;background:var(--red);color:white;font-size:9px;font-family:var(--font-mono);width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;}
+.city-select{background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--font-head);font-size:12px;padding:6px 10px;border-radius:var(--radius);cursor:pointer;outline:none;}
+.content{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:20px;}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;}
+.stat-card.danger{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.05);}
+.stat-card.warn{border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);}
+.stat-card.safe{border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.05);}
+.stat-card.info{border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.05);}
+.stat-label{font-size:10px;font-family:var(--font-mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;}
+.stat-val{font-size:28px;font-weight:800;letter-spacing:-0.03em;line-height:1;}
+.stat-val.red{color:var(--red);}
+.stat-val.amber{color:var(--amber);}
+.stat-val.green{color:var(--green);}
+.stat-val.blue{color:var(--blue);}
+.stat-delta{font-size:11px;font-family:var(--font-mono);margin-top:6px;}
+.stat-delta.up{color:#f87171;}
+.stat-delta.down{color:var(--green);}
+
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.three-col{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+
+/* PANEL */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.panel-title{font-size:13px;font-weight:700;letter-spacing:0.02em;}
+.panel-badge{font-size:10px;font-family:var(--font-mono);padding:3px 8px;border-radius:4px;font-weight:700;}
+.panel-badge.live{background:rgba(239,68,68,0.15);color:var(--red);}
+.panel-badge.ai{background:rgba(168,85,247,0.15);color:var(--purple);}
+
+/* MAP */
+.map-container{position:relative;background:#0d1117;border-radius:var(--radius);overflow:hidden;height:280px;}
+.map-svg{width:100%;height:100%;}
+.map-overlay{position:absolute;top:8px;left:8px;background:rgba(10,11,15,0.85);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:10px;font-family:var(--font-mono);}
+.map-legend{position:absolute;bottom:8px;right:8px;background:rgba(10,11,15,0.85);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:10px;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-family:var(--font-mono);color:var(--text2);}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+
+/* PREDICT FORM */
+.predict-form{display:flex;flex-direction:column;gap:10px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+.form-label{font-size:10px;font-family:var(--font-mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;}
+.form-select,.form-input{background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--font-head);font-size:12px;padding:8px 10px;border-radius:var(--radius);outline:none;width:100%;transition:border 0.15s;}
+.form-select:focus,.form-input:focus{border-color:var(--red);}
+.predict-btn{background:var(--red);color:white;border:none;padding:10px;border-radius:var(--radius);font-family:var(--font-head);font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;letter-spacing:0.02em;}
+.predict-btn:hover{background:var(--red2);}
+.predict-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.result-box{border-radius:var(--radius);padding:12px;border:1px solid;display:none;}
+.result-box.high{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.4);}
+.result-box.medium{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.4);}
+.result-box.low{background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.4);}
+.result-level{font-size:22px;font-weight:800;letter-spacing:-0.02em;}
+.result-level.high{color:var(--red);}
+.result-level.medium{color:var(--amber);}
+.result-level.low{color:var(--green);}
+.result-advice{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.5;font-family:var(--font-mono);}
+.thinking{font-size:11px;font-family:var(--font-mono);color:var(--purple);padding:10px;background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:var(--radius);display:none;animation:blink 1.2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.5}}
+
+/* ALERTS */
+.alerts-list{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;}
+.alert-item{display:flex;gap:10px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);border-left:3px solid;}
+.alert-item.high{border-left-color:var(--red);}
+.alert-item.medium{border-left-color:var(--amber);}
+.alert-item.low{border-left-color:var(--green);}
+.alert-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;}
+.alert-icon.high{background:rgba(239,68,68,0.15);}
+.alert-icon.medium{background:rgba(245,158,11,0.15);}
+.alert-icon.low{background:rgba(34,197,94,0.15);}
+.alert-body{flex:1;}
+.alert-msg{font-size:12px;font-weight:600;line-height:1.3;}
+.alert-meta{font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-top:3px;}
+.alert-severity{font-size:9px;font-family:var(--font-mono);padding:2px 6px;border-radius:3px;font-weight:700;flex-shrink:0;align-self:flex-start;margin-top:2px;}
+.alert-severity.high{background:rgba(239,68,68,0.15);color:var(--red);}
+.alert-severity.medium{background:rgba(245,158,11,0.15);color:var(--amber);}
+.alert-severity.low{background:rgba(34,197,94,0.15);color:var(--green);}
+
+/* HOTSPOT TABLE */
+.hotspot-table{width:100%;border-collapse:collapse;font-size:12px;}
+.hotspot-table th{font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);}
+.hotspot-table td{padding:8px 8px;border-bottom:1px solid rgba(42,47,61,0.5);vertical-align:middle;}
+.hotspot-table tr:last-child td{border-bottom:none;}
+.risk-bar{height:4px;border-radius:2px;background:var(--bg3);}
+.risk-fill{height:100%;border-radius:2px;}
+.tag{display:inline-block;font-size:9px;font-family:var(--font-mono);padding:2px 6px;border-radius:3px;font-weight:700;}
+.tag.high{background:rgba(239,68,68,0.15);color:var(--red);}
+.tag.medium{background:rgba(245,158,11,0.15);color:var(--amber);}
+.tag.low{background:rgba(34,197,94,0.15);color:var(--green);}
+
+.chart-wrap{position:relative;height:160px;}
+.divider{height:1px;background:var(--border);margin:4px 0 12px;}
+.project-note{font-size:11px;line-height:1.55;color:var(--text2);font-family:var(--font-mono);background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:var(--radius);padding:10px 12px;margin-top:12px;}
+
+@media (max-width: 980px){
+  .app{flex-direction:column;}
+  .sidebar{width:100%;min-width:0;border-right:0;border-bottom:1px solid var(--border);}
+  .logo{display:flex;align-items:center;gap:12px;padding:12px 16px;}
+  .logo-icon{margin-bottom:0;}
+  .nav{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;}
+  .nav-label,.sidebar-bottom{display:none;}
+  .nav-item{white-space:nowrap;margin-bottom:0;}
+  .main{overflow:visible;}
+  .topbar{padding:12px 16px;gap:12px;align-items:flex-start;}
+  .content{padding:16px;gap:16px;}
+  .stat-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col,.three-col{grid-template-columns:1fr;}
+}
+
+@media (max-width: 560px){
+  .topbar{flex-direction:column;}
+  .topbar-right{width:100%;justify-content:space-between;}
+  .stat-grid,.form-row{grid-template-columns:1fr;}
+  .panel{padding:12px;}
+  .map-container{height:260px;}
+  #page-map .map-container{height:340px!important;}
+  .hotspot-table th:nth-child(2),.hotspot-table td:nth-child(2){display:none;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div class="logo-title">CRIME INTEL<br>SYSTEM</div>
+      <div class="logo-sub">v2.0 AI-POWERED</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Modules</div>
+      <div class="nav-item active" onclick="setPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="setPage('predict')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        AI Predict
+      </div>
+      <div class="nav-item" onclick="setPage('map')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Heatmap
+      </div>
+      <div class="nav-item" onclick="setPage('alerts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        Alerts
+      </div>
+      <div class="nav-item" onclick="setPage('analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Analytics
+      </div>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="status-badge"><div class="dot"></div>AI Engine Online</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Crime Intelligence Dashboard</div>
+      <div class="topbar-right">
+        <select class="city-select" id="city-select" onchange="updateCity()">
+          <option value="bangalore">Bengaluru, IN</option>
+          <option value="mumbai">Mumbai, IN</option>
+          <option value="delhi">Delhi, IN</option>
+          <option value="hyderabad">Hyderabad, IN</option>
+        </select>
+        <div class="alert-bell">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <div class="alert-count" id="alert-count">3</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <!-- Dashboard Page -->
+      <div id="page-dashboard">
+        <div class="stat-grid">
+          <div class="stat-card danger">
+            <div class="stat-label">Active Incidents</div>
+            <div class="stat-val red" id="s-incidents">47</div>
+            <div class="stat-delta up">Up 12% vs yesterday</div>
+          </div>
+          <div class="stat-card warn">
+            <div class="stat-label">High Risk Zones</div>
+            <div class="stat-val amber" id="s-zones">8</div>
+            <div class="stat-delta up">Up 2 new zones</div>
+          </div>
+          <div class="stat-card safe">
+            <div class="stat-label">Resolved Today</div>
+            <div class="stat-val green" id="s-resolved">134</div>
+            <div class="stat-delta down">Down 6% response time</div>
+          </div>
+          <div class="stat-card info">
+            <div class="stat-label">AI Predictions</div>
+            <div class="stat-val blue" id="s-preds">312</div>
+            <div class="stat-delta down">94.2% accuracy</div>
+          </div>
+        </div>
+
+        <div class="three-col">
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Crime Heatmap - <span id="map-city-label">Bengaluru</span></div>
+              <div class="panel-badge live">LIVE</div>
+            </div>
+            <div class="map-container">
+              <svg class="map-svg" id="main-map" viewBox="0 0 500 280"></svg>
+              <div class="map-overlay" id="map-time">Updated: <span id="map-clock">--:--</span></div>
+              <div class="map-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>High Risk</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Medium</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Low Risk</div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Live Alerts</div>
+              <div class="panel-badge live">LIVE</div>
+            </div>
+            <div class="alerts-list" id="alerts-mini"></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Crime Hotspots</div>
+              <div class="panel-badge ai">AI RANKED</div>
+            </div>
+            <table class="hotspot-table">
+              <thead><tr><th>Location</th><th>Type</th><th>Risk</th><th>Level</th></tr></thead>
+              <tbody id="hotspot-tbody"></tbody>
+            </table>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Hourly Crime Trend</div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="trendChart" role="img" aria-label="Hourly crime trend chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Predict Page -->
+      <div id="page-predict" style="display:none;">
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">AI Crime Risk Predictor</div>
+              <div class="panel-badge ai">DEMO AI</div>
+            </div>
+            <div class="predict-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <div class="form-label">Area / Zone</div>
+                  <select class="form-select" id="pred-area">
+                    <option>MG Road</option><option>Koramangala</option><option>Whitefield</option>
+                    <option>Marathahalli</option><option>Jayanagar</option><option>Indiranagar</option>
+                    <option>Electronic City</option><option>BTM Layout</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <div class="form-label">Crime Type</div>
+                  <select class="form-select" id="pred-type">
+                    <option>Theft/Robbery</option><option>Vehicle Theft</option><option>Assault</option>
+                    <option>Burglary</option><option>Fraud/Scam</option><option>Harassment</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <div class="form-label">Time of Day</div>
+                  <select class="form-select" id="pred-time">
+                    <option value="0">Late Night (12-4 AM)</option>
+                    <option value="1">Early Morning (4-8 AM)</option>
+                    <option value="2">Morning (8-12 PM)</option>
+                    <option value="3">Afternoon (12-4 PM)</option>
+                    <option value="4">Evening (4-8 PM)</option>
+                    <option value="5">Night (8-12 AM)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <div class="form-label">Day Type</div>
+                  <select class="form-select" id="pred-day">
+                    <option>Weekday</option><option>Weekend</option><option>Holiday</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <div class="form-label">Additional Context (optional)</div>
+                <input class="form-input" id="pred-context" type="text" placeholder="e.g. festival season, night market, heavy rain...">
+              </div>
+              <button class="predict-btn" id="predict-btn" onclick="runPrediction()">Run AI Prediction</button>
+            </div>
+            <div class="thinking" id="thinking-box">Demo AI is analyzing crime patterns...</div>
+            <div class="result-box" id="result-box" style="margin-top:12px;">
+              <div class="stat-label" style="margin-bottom:6px;">PREDICTED RISK LEVEL</div>
+              <div class="result-level" id="result-level"></div>
+              <div class="result-advice" id="result-advice"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Prediction History</div>
+            </div>
+            <div id="pred-history" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map Page -->
+      <div id="page-map" style="display:none;">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Interactive Crime Heatmap</div>
+            <div class="panel-badge live">LIVE</div>
+          </div>
+          <div class="map-container" style="height:420px;">
+            <svg class="map-svg" id="big-map" viewBox="0 0 700 420"></svg>
+            <div class="map-overlay">Interactive - <span id="hover-zone">Hover over a zone</span></div>
+            <div class="map-legend">
+              <div style="font-size:10px;font-family:var(--font-mono);color:var(--text2);margin-bottom:6px;">RISK LEVEL</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>HIGH (>70%)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>MEDIUM (40-70%)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>LOW (<40%)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>SAFE ZONE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts Page -->
+      <div id="page-alerts" style="display:none;">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Safety Alerts Feed</div>
+            <div class="panel-badge live">LIVE MONITORING</div>
+          </div>
+          <div id="alerts-full" class="alerts-list" style="max-height:500px;"></div>
+        </div>
+      </div>
+
+      <!-- Analytics Page -->
+      <div id="page-analytics" style="display:none;">
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Crime by Type</div></div>
+            <div class="chart-wrap" style="height:220px;"><canvas id="typeChart" role="img" aria-label="Crime types pie chart"></canvas></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Monthly Trend</div></div>
+            <div class="chart-wrap" style="height:220px;"><canvas id="monthlyChart" role="img" aria-label="Monthly crime trend"></canvas></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">Zone Risk Comparison</div></div>
+          <div class="chart-wrap" style="height:200px;"><canvas id="zoneChart" role="img" aria-label="Zone risk bar chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CITIES = {
+  bangalore:{label:'Bengaluru',zones:[
+    {name:'MG Road',risk:82,type:'Theft',lat:175,lng:210},{name:'Koramangala',risk:65,type:'Robbery',lat:220,lng:175},
+    {name:'Whitefield',risk:45,type:'Burglary',lat:300,lng:140},{name:'Marathahalli',risk:71,type:'Vehicle Theft',lat:280,lng:170},
+    {name:'Jayanagar',risk:35,type:'Harassment',lat:190,lng:230},{name:'Indiranagar',risk:58,type:'Assault',lat:240,lng:155},
+    {name:'Electronic City',risk:28,type:'Fraud',lat:230,lng:250},{name:'BTM Layout',risk:53,type:'Theft',lat:205,lng:240},
+    {name:'Hebbal',risk:40,type:'Theft',lat:200,lng:120},{name:'Yelahanka',risk:22,type:'Burglary',lat:195,lng:90}
+  ]},
+  mumbai:{label:'Mumbai',zones:[
+    {name:'Dharavi',risk:88,type:'Robbery',lat:180,lng:200},{name:'Kurla',risk:74,type:'Theft',lat:220,lng:180},
+    {name:'Andheri',risk:60,type:'Assault',lat:170,lng:140},{name:'Bandra',risk:42,type:'Vehicle Theft',lat:150,lng:200},
+    {name:'Borivali',risk:31,type:'Fraud',lat:160,lng:100},{name:'Chembur',risk:67,type:'Burglary',lat:250,lng:190},
+    {name:'Malad',risk:38,type:'Harassment',lat:155,lng:120},{name:'Thane',risk:55,type:'Theft',lat:280,lng:160}
+  ]},
+  delhi:{label:'Delhi',zones:[
+    {name:'Old Delhi',risk:91,type:'Robbery',lat:200,lng:160},{name:'Rohini',risk:70,type:'Assault',lat:170,lng:120},
+    {name:'Dwarka',risk:48,type:'Theft',lat:140,lng:200},{name:'Lajpat Nagar',risk:62,type:'Burglary',lat:215,lng:200},
+    {name:'Connaught Place',risk:55,type:'Fraud',lat:195,lng:180},{name:'Noida',risk:44,type:'Vehicle Theft',lat:260,lng:190},
+    {name:'Gurugram',risk:38,type:'Harassment',lat:180,lng:240},{name:'Saket',risk:30,type:'Theft',lat:210,lng:220}
+  ]},
+  hyderabad:{label:'Hyderabad',zones:[
+    {name:'Old City',risk:80,type:'Robbery',lat:190,lng:200},{name:'Secunderabad',risk:62,type:'Theft',lat:220,lng:170},
+    {name:'HITEC City',risk:35,type:'Fraud',lat:165,lng:170},{name:'Banjara Hills',risk:44,type:'Burglary',lat:180,lng:190},
+    {name:'LB Nagar',risk:70,type:'Assault',lat:230,lng:220},{name:'Kompally',risk:25,type:'Theft',lat:195,lng:120},
+    {name:'Kukatpally',risk:50,type:'Vehicle Theft',lat:170,lng:150},{name:'Dilsukhnagar',risk:68,type:'Robbery',lat:230,lng:200}
+  ]}
+};
+
+const ALERTS=[
+  {msg:'High theft activity near MG Road junction',time:'2 min ago',level:'high',area:'MG Road'},
+  {msg:'Vehicle break-in reported at Whitefield IT Park',time:'8 min ago',level:'medium',area:'Whitefield'},
+  {msg:'Suspicious activity flagged by AI at Marathahalli',time:'15 min ago',level:'high',area:'Marathahalli'},
+  {msg:'Patrol increased in Koramangala sector 4',time:'22 min ago',level:'low',area:'Koramangala'},
+  {msg:'Chain snatching reported near Jayanagar metro',time:'31 min ago',level:'high',area:'Jayanagar'},
+  {msg:'Safe zone cleared at Electronic City Phase 1',time:'45 min ago',level:'low',area:'Electronic City'},
+  {msg:'ATM fraud attempt detected at Indiranagar',time:'52 min ago',level:'medium',area:'Indiranagar'},
+  {msg:'Night patrol alert: Avoid BTM Layout after 11 PM',time:'1 hr ago',level:'medium',area:'BTM Layout'}
+];
+
+let currentCity='bangalore';
+let predHistory=[];
+let trendChart,typeChart,monthlyChart,zoneChart;
+
+function riskColor(r){return r>=70?'#ef4444':r>=40?'#f59e0b':'#22c55e';}
+function riskClass(r){return r>=70?'high':r>=40?'medium':'low';}
+
+function updateClock(){
+  const now=new Date();
+  const h=String(now.getHours()).padStart(2,'0');
+  const m=String(now.getMinutes()).padStart(2,'0');
+  const s=String(now.getSeconds()).padStart(2,'0');
+  const el=document.getElementById('map-clock');
+  if(el)el.textContent=`${h}:${m}:${s}`;
+}
+setInterval(updateClock,1000);updateClock();
+
+function drawMap(svgId,vw,vh){
+  const svg=document.getElementById(svgId);
+  if(!svg)return;
+  const city=CITIES[currentCity];
+  const scaleX=vw/500,scaleY=vh/280;
+
+  svg.innerHTML=`
+    <rect width="${vw}" height="${vh}" fill="#0d1117"/>
+    <defs>
+      ${city.zones.map((z,i)=>`
+      <radialGradient id="g${i}" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="${riskColor(z.risk)}" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="${riskColor(z.risk)}" stop-opacity="0"/>
+      </radialGradient>`).join('')}
+    </defs>
+    ${Array.from({length:20},(_,i)=>`<line x1="${i*vw/19}" y1="0" x2="${i*vw/19}" y2="${vh}" stroke="#1a1f2e" stroke-width="1"/>`).join('')}
+    ${Array.from({length:12},(_,i)=>`<line x1="0" y1="${i*vh/11}" x2="${vw}" y2="${i*vh/11}" stroke="#1a1f2e" stroke-width="1"/>`).join('')}
+    ${city.zones.map((z,i)=>{
+      const x=z.lat*scaleX,y=z.lng*scaleY;
+      const r=Math.max(20,(z.risk/100)*55)*Math.min(scaleX,scaleY);
+      return `
+      <circle cx="${x}" cy="${y}" r="${r*1.5}" fill="url(#g${i})"/>
+      <circle cx="${x}" cy="${y}" r="${r*0.4}" fill="${riskColor(z.risk)}" opacity="0.9"/>
+      <circle cx="${x}" cy="${y}" r="${r*0.4}" fill="none" stroke="${riskColor(z.risk)}" stroke-width="1" opacity="0.6">
+        <animate attributeName="r" values="${r*0.4};${r*0.8};${r*0.4}" dur="${1.5+Math.random()}s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;0;0.6" dur="${1.5+Math.random()}s" repeatCount="indefinite"/>
+      </circle>
+      <text x="${x}" y="${y+r*0.4+12}" text-anchor="middle" fill="#94a3b8" font-size="${Math.max(8,9*Math.min(scaleX,scaleY))}" font-family="Space Mono,monospace">${z.name}</text>`;
+    }).join('')}
+  `;
+}
+
+function renderHotspots(){
+  const city=CITIES[currentCity];
+  const sorted=[...city.zones].sort((a,b)=>b.risk-a.risk);
+  const tbody=document.getElementById('hotspot-tbody');
+  if(!tbody)return;
+  tbody.innerHTML=sorted.slice(0,6).map(z=>`
+    <tr>
+      <td style="font-weight:600;font-size:12px;">${z.name}</td>
+      <td><span class="tag ${riskClass(z.risk)}" style="font-size:9px;">${z.type}</span></td>
+      <td style="width:80px;">
+        <div class="risk-bar"><div class="risk-fill" style="width:${z.risk}%;background:${riskColor(z.risk)};"></div></div>
+      </td>
+      <td><span class="tag ${riskClass(z.risk)}">${riskClass(z.risk).toUpperCase()}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderAlerts(containerId,limit){
+  const el=document.getElementById(containerId);
+  if(!el)return;
+  const icons={high:'!',medium:'i',low:'i'};
+  const list=limit?ALERTS.slice(0,limit):ALERTS;
+  el.innerHTML=list.map(a=>`
+    <div class="alert-item ${a.level}">
+      <div class="alert-icon ${a.level}">${icons[a.level]}</div>
+      <div class="alert-body">
+        <div class="alert-msg">${a.msg}</div>
+        <div class="alert-meta">${a.area} | ${a.time}</div>
+      </div>
+      <div class="alert-severity ${a.level}">${a.level.toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+function initTrendChart(){
+  const ctx=document.getElementById('trendChart');
+  if(!ctx)return;
+  if(trendChart)trendChart.destroy();
+  const hours=Array.from({length:24},(_,i)=>i+':00');
+  const data=[2,1,1,2,3,4,6,8,10,9,8,10,12,14,13,11,14,18,22,19,15,10,7,4];
+  trendChart=new Chart(ctx,{
+    type:'line',
+    data:{labels:hours,datasets:[{label:'Incidents',data,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.08)',fill:true,tension:0.4,pointRadius:0,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b',font:{size:9},maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#64748b',font:{size:9}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+}
+
+function initAnalyticsCharts(){
+  const tc=document.getElementById('typeChart');
+  if(tc){
+    if(typeChart)typeChart.destroy();
+    typeChart=new Chart(tc,{
+      type:'doughnut',
+      data:{labels:['Theft','Robbery','Assault','Burglary','Fraud','Harassment'],datasets:[{data:[35,20,15,12,10,8],backgroundColor:['#ef4444','#f59e0b','#a855f7','#3b82f6','#22c55e','#64748b'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'right',labels:{color:'#94a3b8',font:{size:11},boxWidth:12}}}}
+    });
+  }
+  const mc=document.getElementById('monthlyChart');
+  if(mc){
+    if(monthlyChart)monthlyChart.destroy();
+    monthlyChart=new Chart(mc,{
+      type:'bar',
+      data:{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],datasets:[{label:'Crimes',data:[120,98,145,132,167,188,201,175,162,190,145,130],backgroundColor:'rgba(59,130,246,0.6)',borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+    });
+  }
+  const zc=document.getElementById('zoneChart');
+  if(zc){
+    if(zoneChart)zoneChart.destroy();
+    const city=CITIES[currentCity];
+    const sorted=[...city.zones].sort((a,b)=>b.risk-a.risk);
+    zoneChart=new Chart(zc,{
+      type:'bar',
+      data:{labels:sorted.map(z=>z.name),datasets:[{label:'Risk Score',data:sorted.map(z=>z.risk),backgroundColor:sorted.map(z=>riskColor(z.risk)),borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b',font:{size:10}},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+    });
+  }
+}
+
+function updateCity(){
+  currentCity=document.getElementById('city-select').value;
+  const label=CITIES[currentCity].label;
+  const el=document.getElementById('map-city-label');
+  if(el)el.textContent=label;
+  drawMap('main-map',500,280);
+  drawMap('big-map',700,420);
+  renderHotspots();
+  renderAlerts('alerts-mini',4);
+  renderAlerts('alerts-full');
+}
+
+function setPage(p){
+  document.querySelectorAll('[id^="page-"]').forEach(el=>el.style.display='none');
+  document.getElementById('page-'+p).style.display='';
+  const titles={dashboard:'Crime Intelligence Dashboard',predict:'AI Crime Risk Predictor',map:'Interactive Heatmap',alerts:'Safety Alerts Feed',analytics:'Crime Analytics'};
+  document.getElementById('page-title').textContent=titles[p];
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const pages=['dashboard','predict','map','alerts','analytics'];
+  const idx=pages.indexOf(p);
+  document.querySelectorAll('.nav-item')[idx]?.classList.add('active');
+  setTimeout(()=>{
+    if(p==='dashboard'){drawMap('main-map',500,280);renderHotspots();renderAlerts('alerts-mini',4);initTrendChart();}
+    if(p==='map'){drawMap('big-map',700,420);}
+    if(p==='alerts'){renderAlerts('alerts-full');}
+    if(p==='analytics'){initAnalyticsCharts();}
+  },50);
+}
+
+function calculateDemoRisk(area,type,timeValue,day,context){
+  const city=CITIES[currentCity];
+  const zone=city.zones.find(z=>z.name===area);
+  let score=zone?zone.risk:50;
+  const crimeWeights={
+    'Theft/Robbery':12,
+    'Vehicle Theft':8,
+    'Assault':10,
+    'Burglary':7,
+    'Fraud/Scam':4,
+    'Harassment':5
+  };
+  const timeWeights=[14,4,-6,-2,8,12];
+  const dayWeights={Weekday:0,Weekend:7,Holiday:10};
+  const contextText=context.toLowerCase();
+
+  score+=crimeWeights[type]||0;
+  score+=timeWeights[Number(timeValue)]||0;
+  score+=dayWeights[day]||0;
+  if(/festival|market|concert|crowd|event|night/.test(contextText))score+=8;
+  if(/rain|traffic|power|strike/.test(contextText))score+=5;
+  if(/police|patrol|security|cctv/.test(contextText))score-=10;
+  score=Math.max(12,Math.min(96,Math.round(score)));
+
+  const level=score>=70?'high':score>=40?'medium':'low';
+  const reason=`${area} currently has a ${zone?zone.risk:'moderate'}% base zone score. The selected time, day, crime category, and local context adjust the demo risk model to ${score}%.`;
+  const advice=level==='high'
+    ?'Avoid isolated streets, travel in groups, use well-lit routes, and report suspicious activity to local authorities.'
+    :level==='medium'
+      ?'Stay aware of surroundings, keep valuables secure, and prefer main roads or verified transport.'
+      :'Normal safety precautions are enough, but continue monitoring alerts before travelling.';
+  return {level,score,reason,advice};
+}
+
+function runPrediction(){
+  const btn=document.getElementById('predict-btn');
+  const thinking=document.getElementById('thinking-box');
+  const resultBox=document.getElementById('result-box');
+  const area=document.getElementById('pred-area').value;
+  const type=document.getElementById('pred-type').value;
+  const timeSelect=document.getElementById('pred-time');
+  const time=timeSelect.options[timeSelect.selectedIndex].text;
+  const timeValue=Number(timeSelect.value);
+  const day=document.getElementById('pred-day').value;
+  const context=document.getElementById('pred-context').value.toLowerCase();
+
+  btn.disabled=true;
+  thinking.style.display='block';
+  resultBox.style.display='none';
+
+  setTimeout(()=>{
+    const city=CITIES[currentCity];
+    const zone=city.zones.find(z=>z.name===area);
+    let score=zone?zone.risk:50;
+    const crimeWeights={'Theft/Robbery':12,'Vehicle Theft':8,'Assault':10,'Burglary':7,'Fraud/Scam':4,'Harassment':5};
+    const timeWeights=[14,4,-6,-2,8,12];
+    const dayWeights={Weekday:0,Weekend:7,Holiday:10};
+
+    score+=crimeWeights[type]||0;
+    score+=timeWeights[timeValue]||0;
+    score+=dayWeights[day]||0;
+    if(/festival|market|concert|crowd|event|night/.test(context))score+=8;
+    if(/rain|traffic|power|strike/.test(context))score+=5;
+    if(/police|patrol|security|cctv/.test(context))score-=10;
+    score=Math.max(12,Math.min(96,Math.round(score)));
+
+    const level=score>=70?'high':score>=40?'medium':'low';
+    const reason=`${area} has a ${zone?zone.risk:'moderate'}% base zone score. The selected time, day, crime category, and local context adjust the demo risk score to ${score}%.`;
+    const advice=level==='high'
+      ?'Avoid isolated streets, travel in groups, use well-lit routes, and report suspicious activity to local authorities.'
+      :level==='medium'
+        ?'Stay aware of surroundings, keep valuables secure, and prefer main roads or verified transport.'
+        :'Normal safety precautions are enough, but continue monitoring alerts before travelling.';
+
+    resultBox.className='result-box '+level;
+    document.getElementById('result-level').className='result-level '+level;
+    document.getElementById('result-level').textContent=`${level.toUpperCase()} RISK - ${score}%`;
+    document.getElementById('result-advice').innerHTML=`<b>Analysis:</b> ${reason}<br><br><b>Safety Tips:</b> ${advice}`;
+    resultBox.style.display='block';
+
+    const hist=document.getElementById('pred-history');
+    const item=document.createElement('div');
+    item.className='alert-item '+level;
+    item.style.cssText='border-left-color:'+(level==='high'?'#ef4444':level==='medium'?'#f59e0b':'#22c55e');
+    item.innerHTML=`<div style="flex:1"><div class="alert-msg">${area} - ${type}</div><div class="alert-meta">${time} | ${day}</div></div><span class="tag ${level}">${level.toUpperCase()}</span>`;
+    hist.prepend(item);
+    predHistory.push({area,type,time,day,level});
+
+    thinking.style.display='none';
+    btn.disabled=false;
+  },650);
+}
+window.onload=()=>{
+  drawMap('main-map',500,280);
+  renderHotspots();
+  renderAlerts('alerts-mini',4);
+  renderAlerts('alerts-full');
+  setTimeout(initTrendChart,100);
+  setInterval(()=>{
+    const sI=document.getElementById('s-incidents');
+    if(sI){const v=47+Math.floor(Math.random()*5-2);sI.textContent=v;}
+    const sP=document.getElementById('s-preds');
+    if(sP){const v=312+Math.floor(Math.random()*3);sP.textContent=v;}
+  },3000);
+};
+</script>
+</body>
+</html>
+
+
